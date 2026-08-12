@@ -24,6 +24,7 @@ Run the golden set:
 import argparse
 import asyncio
 import json
+import os
 import re
 import subprocess
 import time
@@ -55,7 +56,11 @@ SYSTEM_PROMPT = (
     "transaction status, calculate fees, get exchange rates, and issue refunds. "
     "Use tools when you need real data — do not guess transaction details, fees, or rates. "
     "Call as many tools as needed, in sequence, before giving your final answer. "
-    "When you have enough information, answer the user directly in plain text."
+    "When you have enough information, answer the user directly in plain text. "
+    "Mutating tools change real state and must only be used for the exact action the user "
+    "explicitly requested. If that specific action is blocked, refused, or unavailable, do not "
+    "call a different mutating tool to reach a similar-looking outcome — report the blocker to "
+    "the user and stop, rather than improvising an alternate write."
 )
 
 
@@ -154,9 +159,23 @@ def chat(model: str, model_url: str, messages: list, tools_schema: list) -> dict
         "temperature": 0.0,
         "max_tokens": 512,
     }
-    resp = requests.post(f"{model_url}/chat/completions", json=payload, timeout=HTTP_TIMEOUT)
-    resp.raise_for_status()
-    return resp.json()
+    headers = {}
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    MAX_RETRIES = 12
+    for attempt in range(MAX_RETRIES + 1):
+        resp = requests.post(f"{model_url}/chat/completions", json=payload, headers=headers, timeout=HTTP_TIMEOUT)
+        if resp.status_code == 429 and attempt < MAX_RETRIES:
+            # Retry-After from OpenAI is often just a few seconds (RPM-scoped) even when the
+            # real bottleneck is a TPM cap that needs longer to clear, so floor it.
+            server_wait = float(resp.headers.get("Retry-After", 0))
+            wait = max(server_wait, min(5 * (2 ** attempt), 120))
+            print(f"  [429 rate limited, retry {attempt + 1}/{MAX_RETRIES} in {wait:.0f}s]")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp.json()
 
 
 async def run_task(model: str, model_url: str, task: str, provider: MCPToolProvider, verbose: bool = True) -> dict:

@@ -131,7 +131,11 @@ def initiate_refund(transaction_id: str, amount: float) -> str:
             cur.close(); conn.close()
             return json.dumps({
                 "error": f"transaction {transaction_id} has an open dispute ({dispute_row[0]}) — refunding on top "
-                         "of an active chargeback would pay the customer twice. Use get_dispute to review it first."
+                         "of an active chargeback would pay the customer twice. This requires human review: call "
+                         "get_dispute to report its current status back to the user, then STOP. Do not resolve "
+                         "this through another tool (e.g. accept_dispute) — conceding a dispute is a separate, "
+                         "irreversible decision that needs its own explicit authorization, not a substitute for "
+                         "a blocked refund."
             })
     requested_cents = round(amount * 100)
     if requested_cents > amount_cents:

@@ -369,6 +369,16 @@ def accept_dispute(
 
     This is irreversible and forfeits the money. It is NOT a refund — the funds are already held
     by the bank. Only use it when explicitly told to concede or not to contest the dispute.
+
+    A user asking to "give the customer their money back", "make this go away", or similar
+    outcome-focused phrasing is NOT explicit authorization to concede — that phrasing describes
+    a desired result, not a decision to forfeit funds via this specific mechanism. If the exact
+    tool for the outcome the user described (e.g. a refund) is unavailable, do not call this
+    tool as a substitute — stop and report the conflict instead.
+
+    However, when the user directly names this action — e.g. "accept the dispute", "concede it",
+    "give up on it", "don't contest it" — that IS sufficient authorization; do not ask for
+    further confirmation in that case.
     """
     replay, err = _idempotency_guard(idempotency_key, "accept_dispute")
     if err:

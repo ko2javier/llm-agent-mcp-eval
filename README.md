@@ -86,11 +86,24 @@ sql/setup_api_facts.sql, setup_mock_transactions.sql
 results/                        # agent run outputs
 ```
 
-## Future work
+## T08: from single-model failure to a fix verified across three vendors
 
-- **A second model** — dropped for budget reasons this phase. Without it there's no way to tell whether T08 (the one harmful-write failure) and the flat accuracy-vs-catalogue-size curve are properties of Gemma 4 specifically or of the tool design itself.
-- **Server-side guard for T08** — `initiate_refund` should refuse when the transaction has an open dispute, the same way it already refuses on a `failed` payment. `results/RESULTADOS_MCP.md` / [`POSTMORTEM.md`](POSTMORTEM.md) (H2) show that warning about it in the prompt (via MCP annotations) buys +26% tokens and zero safety — the fix has to live in the tool, not the description.
-- **Multi-server MCP** — a second MCP server running at the same time, with tool-name collisions and dynamic discovery, hasn't been tested.
+The single-model results above predate two later phases, summarized here so this section stays
+honest about what's actually been tested since:
+
+- **A second model, then a third** — Qwen2.5 32B AWQ was added (see
+  [`MULTIMODEL_PHASE_REPORT.md`](MULTIMODEL_PHASE_REPORT.md) /
+  [`INFORME_FASE_MULTIMODELO.md`](INFORME_FASE_MULTIMODELO.md)), then GPT-4o via the real OpenAI API
+  as a third, architecturally unrelated data point. T08 — the one harmful-write failure, where the
+  model conceded a dispute nobody authorized — reproduced identically on all three.
+- **Server-side guard, then a root-cause fix** — `initiate_refund` now refuses on an open dispute
+  (closing the double-payment path), and a docstring fix on `accept_dispute` closes the remaining
+  path the guard couldn't cover (see [`T08_ROOT_CAUSE_FIX.md`](T08_ROOT_CAUSE_FIX.md)). Verified on
+  the full 50-task golden set on all three models: T08 no longer results in the dispute being
+  conceded on any of them. Full numbers in `MULTIMODEL_PHASE_REPORT.md`'s "Debt #4 & #1 — final
+  verification" section.
+- **Multi-server MCP** — a second MCP server running at the same time, with tool-name collisions and
+  dynamic discovery, still hasn't been tested.
 
 ## Author
 

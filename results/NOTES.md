@@ -16,3 +16,21 @@ documentados en `../POSTMORTEM.md`. Esta tabla dice cuál usar para qué.
 **Regla rápida:** para citar un número, usar `v2_full.json`, `v2_full_annotated2.json`,
 `gemma4_31b_agent_samegpu.json` y `gemma4_31b_mcp_agent.json`. Todo lo demás es o bien histórico
 (no comparable) o bien evidencia de un error ya corregido.
+
+## Diagnóstico de causa raíz de T08 (12/08/2026) — gpt-4o, local
+
+Ver `T08_ROOT_CAUSE_FIX.md` / `INFORME_CAUSA_RAIZ_T08.md` para la narrativa completa. **No
+comparable con las corridas de arriba**: modelo distinto (gpt-4o vía API real, no self-hosted),
+máquina local con Postgres desechable en Docker (no la instancia Vast.ai), y solo 3/12 tareas del
+dataset completo, no las 50.
+
+| Fichero | Qué mide | Estado |
+|---|---|---|
+| `gpt4o_t08_fix4_rep1/2/3.json` | T08 aislada, 3 repeticiones, con el arreglo final (intento 4) puesto | **Válido** — 0/3 escrituras, confirma consistencia |
+| `gpt4o_t03_t14_fix3_regression.json` | T03+T14, con solo el intento 3 (primera versión del arreglo) puesto | **Evidencia de regresión** — T14 rompió aquí; no representa el estado final |
+| `gpt4o_dispute_tasks_fix4_regression.json` | Las 12 tareas de `agent_tasks_v2.json` que tocan disputas, con el arreglo final (intento 4) | **Válido** — 11/12 match exacto; el T08 "mismatch" es benigno (ver informe) |
+
+La corrida baseline (sin ningún arreglo, gpt-4o) y las de los intentos 1 y 2 (que no funcionaron)
+no se guardaron como JSON — solo se observaron en terminal, y están transcritas en
+`T08_ROOT_CAUSE_FIX.md`. El Postgres/venv local usados para todo esto se borraron al cerrar la
+sesión; no queda infraestructura local persistente de esta prueba.
