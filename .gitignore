@@ -1,0 +1,11 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+*.log
+output/
+.claude/
+.hf_home/
+*.token
+**/token
+hugging.txt

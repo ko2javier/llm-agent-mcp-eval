@@ -1,0 +1,77 @@
+[
+  {
+    "id": "A01",
+    "task": "The customer says transaction TX-4521 never arrived. What happened, and how much would the fee have been if it had succeeded?",
+    "expected_tools": ["check_transaction_status", "calculate_fees"]
+  },
+  {
+    "id": "A02",
+    "task": "Refund transaction TX-8832 in full, then tell me what that refunded amount is in US dollars.",
+    "expected_tools": ["initiate_refund", "get_exchange_rate"]
+  },
+  {
+    "id": "A03",
+    "task": "What's the status of TX-1190, and what fee did we charge on it?",
+    "expected_tools": ["check_transaction_status"]
+  },
+  {
+    "id": "A04",
+    "task": "Is TX-3307 done processing yet?",
+    "expected_tools": ["check_transaction_status"]
+  },
+  {
+    "id": "A05",
+    "task": "What does NexusPay's policy say about the refund window, and separately, what's the current status of TX-6654?",
+    "expected_tools": ["rag_lookup", "check_transaction_status"]
+  },
+  {
+    "id": "A06",
+    "task": "What would the processing fee and net amount be for an $89.99 payment versus an $89.99 payout?",
+    "expected_tools": ["calculate_fees"]
+  },
+  {
+    "id": "A07",
+    "task": "Please refund transaction TX-7743.",
+    "expected_tools": ["initiate_refund"]
+  },
+  {
+    "id": "A08",
+    "task": "Convert the amount of transaction TX-5561 from CHF to EUR, and tell me the transaction's current status.",
+    "expected_tools": ["check_transaction_status", "get_exchange_rate"]
+  },
+  {
+    "id": "A09",
+    "task": "How do idempotency keys work in the NexusPay API?",
+    "expected_tools": ["rag_lookup"]
+  },
+  {
+    "id": "A10",
+    "task": "What's the current exchange rate from GBP to SEK?",
+    "expected_tools": ["get_exchange_rate"]
+  },
+  {
+    "id": "A11",
+    "task": "Refund transaction TX-9902 for $200.",
+    "expected_tools": ["initiate_refund"]
+  },
+  {
+    "id": "A12",
+    "task": "Partially refund $10 of transaction TX-2298, and tell me how much fee we originally charged on it.",
+    "expected_tools": ["check_transaction_status", "initiate_refund"]
+  },
+  {
+    "id": "A13",
+    "task": "What's the maximum trial period for a subscription, and what currency does transaction TX-4118 use?",
+    "expected_tools": ["rag_lookup", "check_transaction_status"]
+  },
+  {
+    "id": "A14",
+    "task": "Refund transaction TX-1190 for the full amount and confirm the fee that was originally charged.",
+    "expected_tools": ["check_transaction_status", "initiate_refund"]
+  },
+  {
+    "id": "A15",
+    "task": "Is there a maximum number of refunds allowed per payment? Also, please refund $20 from transaction TX-8832.",
+    "expected_tools": ["rag_lookup", "initiate_refund"]
+  }
+]

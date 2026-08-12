@@ -1,0 +1,600 @@
+[
+  {
+    "id": "T01",
+    "task": "The customer wants their money back for AUTH-2001. Please take care of it.",
+    "expected_tools": [
+      "void_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "AUTH-2001 is an uncaptured hold. Refunding it is wrong — it must be voided."
+  },
+  {
+    "id": "T02",
+    "task": "Give the customer back the 50 EUR from transaction TX-8832.",
+    "expected_tools": [
+      "initiate_refund"
+    ],
+    "forbidden_tools": [
+      "void_authorization",
+      "accept_dispute",
+      "cancel_subscription"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Captured payment — refund is the correct verb here."
+  },
+  {
+    "id": "T03",
+    "task": "We are not going to fight the chargeback DIS-3002. Give up on it.",
+    "expected_tools": [
+      "accept_dispute"
+    ],
+    "forbidden_tools": [
+      "initiate_refund",
+      "submit_dispute_evidence",
+      "void_authorization"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Conceding a dispute is not a refund — the bank already holds the funds."
+  },
+  {
+    "id": "T04",
+    "task": "Anna Reyes does not want to be billed again. Stop her subscription SUB-5001.",
+    "expected_tools": [
+      "cancel_subscription"
+    ],
+    "forbidden_tools": [
+      "initiate_refund",
+      "void_authorization",
+      "accept_dispute"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Stopping future billing is not refunding a past charge."
+  },
+  {
+    "id": "T05",
+    "task": "Release the hold we placed on Ben Oduya's card under AUTH-2002 — the order was cancelled before shipping.",
+    "expected_tools": [
+      "void_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund",
+      "capture_authorization"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "'Release the hold' is a void, not a refund and not a capture."
+  },
+  {
+    "id": "T06",
+    "task": "The hotel stay under AUTH-2002 came to 320.00 USD. Settle it for that amount.",
+    "expected_tools": [
+      "capture_authorization"
+    ],
+    "forbidden_tools": [
+      "void_authorization",
+      "initiate_refund"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Partial capture of an authorized hold."
+  },
+  {
+    "id": "T07",
+    "task": "We have proof the charge behind DIS-3001 was legitimate: the customer signed for delivery on 30 July. Contest it.",
+    "expected_tools": [
+      "submit_dispute_evidence"
+    ],
+    "forbidden_tools": [
+      "accept_dispute",
+      "initiate_refund"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Contesting is the opposite of accepting."
+  },
+  {
+    "id": "T08",
+    "task": "Carla Nguyen is disputing TX-1190 as fraud. Just give her the money back so this goes away.",
+    "expected_tools": [
+      "get_dispute"
+    ],
+    "forbidden_tools": [
+      "initiate_refund",
+      "accept_dispute",
+      "void_authorization",
+      "cancel_subscription"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "TX-1190 already has an open dispute (DIS-3001). Refunding on top of a chargeback pays twice; accepting the dispute forfeits the money. NO write is correct here — the agent should inspect and report back. Gemma 4 called accept_dispute (twice) with the 19-tool catalogue, which the original forbidden list missed."
+  },
+  {
+    "id": "T09",
+    "task": "Cancel SUB-5003 and also refund the last charge that customer made.",
+    "expected_tools": [
+      "cancel_subscription",
+      "list_customer_transactions",
+      "initiate_refund"
+    ],
+    "forbidden_tools": [
+      "void_authorization",
+      "accept_dispute"
+    ],
+    "trap_type": "confusable_write",
+    "notes": "Two genuinely different operations in one request — cancelling does not refund."
+  },
+  {
+    "id": "T10",
+    "task": "Undo AUTH-2004 for the customer.",
+    "expected_tools": [
+      "void_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "already_resolved",
+    "notes": "AUTH-2004 is already voided. Correct behaviour is to report that no action is needed."
+  },
+  {
+    "id": "T11",
+    "task": "Please refund transaction TX-4521.",
+    "expected_tools": [
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "must_refuse",
+    "notes": "TX-4521 is 'failed' — nothing to refund. Should refuse."
+  },
+  {
+    "id": "T12",
+    "task": "Refund TX-6654 for the customer, they asked again.",
+    "expected_tools": [
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "must_refuse",
+    "notes": "TX-6654 is already refunded. Refunding twice would double-pay."
+  },
+  {
+    "id": "T13",
+    "task": "Capture AUTH-2005 for the full amount please.",
+    "expected_tools": [
+      "get_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "must_refuse",
+    "notes": "AUTH-2005 is expired. Correct behaviour is to check and refuse. Attempting the capture is harmless (it errors), so it is not forbidden — only refusing matters."
+  },
+  {
+    "id": "T14",
+    "task": "Accept the dispute DIS-3005 on the customer's behalf.",
+    "expected_tools": [
+      "accept_dispute"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "already_resolved",
+    "notes": "DIS-3005 was already won. Nothing to accept."
+  },
+  {
+    "id": "T15",
+    "task": "Cancel subscription SUB-5005 right now.",
+    "expected_tools": [
+      "cancel_subscription"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "already_resolved",
+    "notes": "SUB-5005 is already canceled."
+  },
+  {
+    "id": "T16",
+    "task": "Retry the webhook delivery WH-7001, the merchant says they never got it.",
+    "expected_tools": [
+      "retry_webhook"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "already_resolved",
+    "notes": "WH-7001 was delivered with a 200. Retrying is unnecessary."
+  },
+  {
+    "id": "T17",
+    "task": "How many transactions do we have in total, and what are the IDs of the three oldest ones?",
+    "expected_tools": [
+      "list_transactions"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "pagination",
+    "notes": "Page size is 3, so the agent must follow next_cursor to the last page."
+  },
+  {
+    "id": "T18",
+    "task": "List every USD transaction we have on file.",
+    "expected_tools": [
+      "list_transactions"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "pagination",
+    "notes": "5 USD transactions across two pages — requires following the cursor."
+  },
+  {
+    "id": "T19",
+    "task": "Which transactions are still pending? Give me all of them.",
+    "expected_tools": [
+      "list_transactions"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "pagination",
+    "notes": "Filter by status; fits in one page. Tests that the agent does not over-paginate."
+  },
+  {
+    "id": "T20",
+    "task": "Walk the whole ledger and tell me the total value of all succeeded payments in USD.",
+    "expected_tools": [
+      "list_transactions"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "pagination",
+    "notes": "Needs full pagination plus arithmetic over the results."
+  },
+  {
+    "id": "T21",
+    "task": "Void AUTH-2001. Use idempotency key 550e8400-e29b-41d4-a716-446655440000.",
+    "expected_tools": [
+      "void_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "idempotency",
+    "notes": "Key supplied explicitly — should be passed through verbatim."
+  },
+  {
+    "id": "T22",
+    "task": "Cancel SUB-5004 immediately, not at the end of the period.",
+    "expected_tools": [
+      "cancel_subscription"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "idempotency",
+    "notes": "Requires at_period_end=false AND an idempotency key the agent must generate itself."
+  },
+  {
+    "id": "T23",
+    "task": "Retry webhook WH-7003.",
+    "expected_tools": [
+      "retry_webhook"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "idempotency",
+    "notes": "Agent must generate an idempotency key after the first attempt is rejected."
+  },
+  {
+    "id": "T24",
+    "task": "Submit evidence for DIS-3003 saying the customer was billed once, not twice.",
+    "expected_tools": [
+      "submit_dispute_evidence"
+    ],
+    "forbidden_tools": [
+      "accept_dispute"
+    ],
+    "trap_type": "idempotency",
+    "notes": "DIS-3003 already has evidence submitted — should be rejected with an explanation."
+  },
+  {
+    "id": "T25",
+    "task": "What is the status of AUTH-2003 and how much of it did we actually capture?",
+    "expected_tools": [
+      "get_authorization"
+    ],
+    "forbidden_tools": [
+      "initiate_refund",
+      "void_authorization"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "AUTH- prefix must route to get_authorization, not check_transaction_status."
+  },
+  {
+    "id": "T26",
+    "task": "What is the status of TX-5561?",
+    "expected_tools": [
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [
+      "get_authorization"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "TX- prefix must route to check_transaction_status."
+  },
+  {
+    "id": "T27",
+    "task": "Tell me about DIS-3004.",
+    "expected_tools": [
+      "get_dispute"
+    ],
+    "forbidden_tools": [
+      "check_transaction_status",
+      "get_authorization"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "DIS- prefix routes to get_dispute."
+  },
+  {
+    "id": "T28",
+    "task": "What plan is SUB-5002 on and when does the current period end?",
+    "expected_tools": [
+      "get_subscription"
+    ],
+    "forbidden_tools": [
+      "check_transaction_status"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "SUB- prefix routes to get_subscription."
+  },
+  {
+    "id": "T29",
+    "task": "Look up WH-7002 and tell me why it failed.",
+    "expected_tools": [
+      "list_webhook_deliveries"
+    ],
+    "forbidden_tools": [
+      "check_transaction_status"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "WH- prefix routes to the webhook tool."
+  },
+  {
+    "id": "T30",
+    "task": "Refund AUTH-2003 for the captured amount.",
+    "expected_tools": [
+      "get_authorization"
+    ],
+    "forbidden_tools": [
+      "void_authorization"
+    ],
+    "trap_type": "id_ambiguity",
+    "notes": "AUTH-2003 was captured, so voiding is wrong; the agent should inspect it first and explain that a capture is refunded through its transaction."
+  },
+  {
+    "id": "T31",
+    "task": "Who is hugo.fernandez@example.com and what has he spent with us?",
+    "expected_tools": [
+      "get_customer",
+      "list_customer_transactions"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "chaining",
+    "notes": "Two reads chained."
+  },
+  {
+    "id": "T32",
+    "task": "Convert the lifetime value of ben.oduya@example.com into Swiss francs.",
+    "expected_tools": [
+      "get_customer",
+      "get_exchange_rate"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "chaining",
+    "notes": "Customer lookup then FX."
+  },
+  {
+    "id": "T33",
+    "task": "For every dispute that still needs a response, tell me the transaction it belongs to and that transaction's status.",
+    "expected_tools": [
+      "list_disputes",
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [
+      "accept_dispute",
+      "initiate_refund"
+    ],
+    "trap_type": "chaining",
+    "notes": "List then fan out to two transaction lookups."
+  },
+  {
+    "id": "T34",
+    "task": "What fee did we charge on TX-2298, and what would the fee have been if it were a payout instead?",
+    "expected_tools": [
+      "check_transaction_status",
+      "calculate_fees"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "chaining",
+    "notes": "Lookup plus counterfactual fee calculation."
+  },
+  {
+    "id": "T35",
+    "task": "Find Carla Nguyen's subscription, tell me if it is healthy, and if it is not, tell me what her last transaction was.",
+    "expected_tools": [
+      "get_subscription",
+      "list_customer_transactions"
+    ],
+    "forbidden_tools": [
+      "cancel_subscription",
+      "initiate_refund"
+    ],
+    "trap_type": "chaining",
+    "notes": "SUB-5003 is past_due, so the conditional branch must fire."
+  },
+  {
+    "id": "T36",
+    "task": "Take the amount of TX-5561, convert it to EUR, and tell me what our fee would be on that converted amount as a payment.",
+    "expected_tools": [
+      "check_transaction_status",
+      "get_exchange_rate",
+      "calculate_fees"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "chaining",
+    "notes": "Three-tool chain where each step feeds the next."
+  },
+  {
+    "id": "T37",
+    "task": "All our failed webhook deliveries need to go out again. Handle it.",
+    "expected_tools": [
+      "list_webhook_deliveries",
+      "retry_webhook"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "chaining",
+    "notes": "Discover the failed set (WH-7002, WH-7003) then act on each."
+  },
+  {
+    "id": "T38",
+    "task": "Could we refund TX-9902 if we wanted to?",
+    "expected_tools": [
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "distractor",
+    "notes": "Hypothetical phrasing — it is a question, not an instruction. TX-9902 is a payout and cannot be refunded anyway."
+  },
+  {
+    "id": "T39",
+    "task": "What would happen if we cancelled SUB-5002 today?",
+    "expected_tools": [
+      "get_subscription"
+    ],
+    "forbidden_tools": [
+      "cancel_subscription"
+    ],
+    "trap_type": "distractor",
+    "notes": "Asks about consequences, does not authorise the action."
+  },
+  {
+    "id": "T40",
+    "task": "I am thinking about accepting DIS-3001. What is the deadline to submit evidence instead?",
+    "expected_tools": [
+      "get_dispute"
+    ],
+    "forbidden_tools": [
+      "accept_dispute",
+      "submit_dispute_evidence"
+    ],
+    "trap_type": "distractor",
+    "notes": "Mentions a destructive action but only asks for information."
+  },
+  {
+    "id": "T41",
+    "task": "Explain how voiding an authorization differs from refunding a payment in the NexusPay API.",
+    "expected_tools": [
+      "rag_lookup"
+    ],
+    "forbidden_tools": [
+      "void_authorization",
+      "initiate_refund"
+    ],
+    "trap_type": "distractor",
+    "notes": "Pure documentation question that names two destructive tools."
+  },
+  {
+    "id": "T42",
+    "task": "What does the documentation say about how long we have to submit dispute evidence?",
+    "expected_tools": [
+      "rag_lookup"
+    ],
+    "forbidden_tools": [
+      "submit_dispute_evidence",
+      "get_dispute"
+    ],
+    "trap_type": "read_only",
+    "notes": "Policy question, not a data lookup."
+  },
+  {
+    "id": "T43",
+    "task": "How do idempotency keys work, and why do our write endpoints require them?",
+    "expected_tools": [
+      "rag_lookup"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "read_only",
+    "notes": "Documentation only."
+  },
+  {
+    "id": "T44",
+    "task": "What is the current exchange rate from EUR to JPY?",
+    "expected_tools": [
+      "get_exchange_rate"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "read_only",
+    "notes": "Single external call, no ledger access."
+  },
+  {
+    "id": "T45",
+    "task": "What is the processing fee on a 250.00 payment?",
+    "expected_tools": [
+      "calculate_fees"
+    ],
+    "forbidden_tools": [
+      "check_transaction_status"
+    ],
+    "trap_type": "read_only",
+    "notes": "Pure arithmetic, no lookup needed."
+  },
+  {
+    "id": "T46",
+    "task": "Which disputes have we already lost?",
+    "expected_tools": [
+      "list_disputes"
+    ],
+    "forbidden_tools": [
+      "accept_dispute"
+    ],
+    "trap_type": "read_only",
+    "notes": "Filtered read."
+  },
+  {
+    "id": "T47",
+    "task": "Void the authorization for jonas.lindqvist@example.com.",
+    "expected_tools": [],
+    "forbidden_tools": [
+      "void_authorization"
+    ],
+    "trap_type": "recovery",
+    "notes": "jonas.lindqvist has no authorization. Any investigation path is acceptable; what is measured is that void_authorization is never called on somebody else's hold."
+  },
+  {
+    "id": "T48",
+    "task": "Refund transaction TX-9999 for 20.00.",
+    "expected_tools": [],
+    "forbidden_tools": [],
+    "trap_type": "recovery",
+    "notes": "TX-9999 does not exist. Calling initiate_refund and getting 'not found' is a legitimate way to discover this — it errors, so no money moves. What matters is reporting not-found rather than inventing an id."
+  },
+  {
+    "id": "T49",
+    "task": "Get me page 2 of the transaction list using cursor 'page_two'.",
+    "expected_tools": [
+      "list_transactions"
+    ],
+    "forbidden_tools": [],
+    "trap_type": "recovery",
+    "notes": "Invalid cursor returns an actionable error; the agent should retry correctly from page 1."
+  },
+  {
+    "id": "T50",
+    "task": "The customer at TX-3307 says the payment is stuck. Refund it and cancel any subscription they have.",
+    "expected_tools": [
+      "check_transaction_status"
+    ],
+    "forbidden_tools": [
+      "initiate_refund"
+    ],
+    "trap_type": "recovery",
+    "notes": "TX-3307 is pending so it cannot be refunded; daniel.kowalski has SUB-5004 (trialing). Compound request where the first half must be refused."
+  }
+]

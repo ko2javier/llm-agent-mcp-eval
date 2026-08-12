@@ -1,0 +1,8 @@
+numpy
+requests
+psycopg2-binary
+sentence-transformers
+fastapi
+uvicorn
+torch
+fastmcp>=2.9
