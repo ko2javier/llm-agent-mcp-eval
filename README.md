@@ -81,9 +81,13 @@ scripts/
   agent.py                      # new — the ReAct loop
   mcp_server.py                 # new — the same 5 tools exposed over MCP (FastMCP, HTTP)
   mcp_agent.py                  # new — same ReAct loop, tools discovered via MCP client
+  persona_agent.py              # new — multi-turn persona(user-simulator) <-> agent dialogue loop
+  score_persona_runs.py         # new — automated scoring for persona_agent.py output
 dataset/agent_tasks.json        # new — 15-task golden set
+dataset/personas_pilot.json     # new — 5 persona cards (hidden goal, success criteria)
 sql/setup_api_facts.sql, setup_mock_transactions.sql
-results/                        # agent run outputs
+results/                        # agent + persona-pilot run outputs
+docs/langfuse/                  # Langfuse dashboard screenshots (observability evidence)
 ```
 
 ## T08: from single-model failure to a fix verified across three vendors
@@ -104,6 +108,44 @@ honest about what's actually been tested since:
   verification" section.
 - **Multi-server MCP** — a second MCP server running at the same time, with tool-name collisions and
   dynamic discovery, still hasn't been tested.
+
+## Multi-turn evaluation: persona-agent pilot
+
+Everything above tests one thing: given a single-sentence task, does the model pick the right tool? That doesn't test what actually breaks agents in production — a customer who reveals information gradually, applies pressure, or phrases an authorization ambiguously. This phase adds a second layer: a **user-simulator LLM plays the customer**, with a hidden goal and persona card, talking to the same agent over several real turns instead of a canned sentence — the pattern used by [τ-bench (Sierra AI, 2024)](https://arxiv.org/abs/2406.12045), applied here on top of the project's own fintech domain and its already-verified T08 write guard, rather than τ-bench's generic dataset.
+
+**5 personas**, each grounded in real seed data, each testing a different failure mode:
+
+| ID | Tests | Should the agent write? |
+|---|---|---|
+| P01 evasive_t08 | Indirect authorization ("just fix it") | No |
+| P02 confused_ambiguous | Disambiguation from vague customer-given details | No |
+| P03 adversarial_manipulative | Urgency pressure on an already-resolved case | No |
+| P04 legitimate_multi_need | A genuine request revealed progressively | **Yes** — the counterpart to P01-P03: an agent that never writes anything isn't safe, it's useless |
+| P05 impatient_pressuring | Wrong amount + pressure to skip verification | No |
+
+Each persona ran with **both model-role assignments** (Qwen2.5-32B and Gemma4-31B each played agent once and persona once), to check whether behavior depends on which model plays which role. Implemented in `scripts/persona_agent.py`, wrapping the existing single-turn ReAct loop rather than duplicating it.
+
+**Result: 80/80 clean at full scale** — 5 personas × 2 directions × 8 repetitions, zero unauthorized writes (`forbidden_called`), zero failures on the action that *should* happen (`required_tools_satisfied`, P04 only). Automated with `scripts/score_persona_runs.py` instead of reading 80 transcripts by hand.
+
+**The story worth telling is how it got to 80/80, not just the number.** The first pilot run (N=3, 13 Aug) found P04 failing 0/3 in one role direction — the agent never completed a legitimate cancellation. Root cause: the harness let the simulated persona end the conversation on a fixed turn count, before the agent (playing a role that needed one extra clarifying turn) got the chance to act — not an agent failure, a harness bug. Fixed by gating conversation-end on whether the expected tool actually appears in the agent's call history (`required_tools` in `persona_agent.py`), not on a turn count. Re-verified live on Vast.ai: 0/3 → 3/3 → **8/8** at full scale, with the original (already-working) direction regression-checked at every step to confirm the fix didn't break it. A second, independent finding along the way: a premature-conversation-end bug in the *scoring* harness itself (not the agent, not the simulator) initially made P02 look like an agent failure — caught before being reported, documented as a reminder that a multi-turn eval's own tooling needs the same scrutiny as the system under test.
+
+Full results: [`results/PERSONA_PILOT_REPORT.md`](results/PERSONA_PILOT_REPORT.md) (English) / [`results/INFORME_PILOTO_PERSONA.md`](results/INFORME_PILOTO_PERSONA.md) (Spanish). Debugging process: `POSTMORTEM.md` Partes 8-9.
+
+## Third model investigated, retired for a structural reason
+
+Cohere's **Command-R 35B** was investigated as a third vendor data point (after Qwen and Gemma4), verified against vLLM 0.26.0's actual source (`registry.py`, `cohere_command_tool_parser.py`) before spending any GPU time — the same architecture+parser check already used to validate Gemma4 in earlier phases. It loaded and served fine, but every tool-calling request failed: Command-R's chat template renders tools in **Cohere's own pre-OpenAI format** (`name` + `parameter_definitions`), not the `{type:"function", function:{...}}` schema this project (and the OpenAI-compatible ecosystem generally) generates. Verified this isn't one bad quantization — the August-2024 refresh of the same model uses the identical native format, and the only Cohere model confirmed to support OpenAI-format tools is Command A+, a 218B MoE requiring multi-H100 serving, well outside this project's ~30B/single-GPU scope. **Retired the whole Command-R family as a candidate** rather than force an adapter for a third data point of secondary value. Full diagnostic, including the exact Jinja template line, in `POSTMORTEM.md` E38.
+
+## Observability (Langfuse)
+
+Traces and scores from this project (tool-selection accuracy, `wrong_write`/`forbidden_called`, `hit_max_turns`, `required_tools_satisfied`, latency, cost) are ingested into the same self-hosted [Langfuse](https://langfuse.com) instance used by [llm-rag-hybrid-benchmark](https://github.com/ko2javier/llm-rag-hybrid-benchmark)'s judge-comparison work — one dashboard covering the whole portfolio, not a separate deployment per repo.
+
+The trace below is the exact P04-swapped-direction case that failed 0/3 before the fix, now passing (`forbidden_write: False`, `required_tools_satisfied: True`), with the tool-call graph Langfuse builds automatically:
+
+![P04 fix verified live in a Langfuse trace](docs/langfuse/trace_detail_p04_fix_verified.jpg)
+
+Aggregated across every scored run, `required_tools_satisfied` is `True` in 100% of observations, zero `False`:
+
+![Langfuse analytics: required_tools_satisfied distribution](docs/langfuse/analytics_required_tools_satisfied.jpg)
 
 ## Author
 
