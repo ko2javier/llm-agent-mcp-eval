@@ -19,16 +19,19 @@ Run one persona once:
     python scripts/persona_agent.py --persona P01_evasive_t08 --agent-model Qwen/Qwen2.5-32B-Instruct-AWQ \
         --persona-model stelterlab/Mistral-Small-24B-Instruct-2501-AWQ
 
-Run all personas in the pilot file, N repetitions each:
+Run all personas in the pilot file, N repetitions each, resetting the ledger before every
+repetition so they're independent (required for P04, whose write only has an effect once):
     python scripts/persona_agent.py --personas-file dataset/personas_pilot.json \
         --agent-model Qwen/Qwen2.5-32B-Instruct-AWQ \
         --persona-model stelterlab/Mistral-Small-24B-Instruct-2501-AWQ \
-        --repetitions 1 --output results/persona_pilot.json
+        --repetitions 8 --reset-cmd "bash scripts/reset_ledger.sh" \
+        --output results/persona_pilot.json
 """
 
 import argparse
 import asyncio
 import json
+import subprocess
 import time
 
 import requests
@@ -95,6 +98,10 @@ async def run_conversation(agent_model: str, agent_url: str, persona_model: str,
     persona_messages = [{"role": "system", "content": persona["system_prompt"]}]
     max_turns = persona.get("max_dialogue_turns", MAX_DIALOGUE_TURNS)
     min_turns = persona.get("min_dialogue_turns", 1)  # 0-indexed dturn must reach this before ending is allowed
+    required_tools = persona.get("required_tools", [])  # must appear in tool history before the
+    # persona may end — min_dialogue_turns alone doesn't adapt to a longer-than-expected agent
+    # path (e.g. an extra clarifying question), which let P04's swapped direction end 0/3 times
+    # without the write ever happening (PERSONA_PILOT_REPORT.md limitation #1).
 
     transcript = []
     all_tool_calls = []
@@ -113,7 +120,11 @@ async def run_conversation(agent_model: str, agent_url: str, persona_model: str,
         # across personas/models even with the strongest wording tried (POSTMORTEM H5/E33/E34).
         # min_dialogue_turns forces the loop to continue regardless of what the model outputs,
         # until dturn reaches it; only then can the persona actually end the conversation.
-        if END_MARKER in persona_text and dturn >= min_turns:
+        # required_tools is the second, independent gate: a turn count that's merely long enough
+        # on average still isn't a guarantee the expected write actually landed.
+        called_so_far = [tc["name"] for tc in all_tool_calls]
+        required_done = all(t in called_so_far for t in required_tools)
+        if END_MARKER in persona_text and dturn >= min_turns and required_done:
             ended_by = "persona"
             break
 
@@ -144,6 +155,8 @@ async def run_conversation(agent_model: str, agent_url: str, persona_model: str,
         "latency_s": round(time.monotonic() - t0, 3),
         "forbidden_tools": persona.get("forbidden_tools", []),
         "forbidden_called": [t for t in called if t in persona.get("forbidden_tools", [])],
+        "required_tools": required_tools,
+        "required_tools_satisfied": all(t in called for t in required_tools),
     }
 
 
@@ -158,6 +171,12 @@ def parse_args():
     p.add_argument("--personas-file", default="dataset/personas_pilot.json")
     p.add_argument("--repetitions", type=int, default=1)
     p.add_argument("--output", help="Where to save JSON results (omit to just print)")
+    p.add_argument("--reset-cmd",
+                   help="Shell command run before EVERY repetition to re-seed the ledger (same "
+                        "purpose as mcp_agent.py's --reset-cmd, e.g. 'bash scripts/reset_ledger.sh'). "
+                        "Without it, repetitions of the same persona share state — P04's "
+                        "cancel_subscription only has an effect once; reps 2-3 then exercise "
+                        "'already canceled' handling, not the cancellation itself.")
     return p.parse_args()
 
 
@@ -176,11 +195,18 @@ async def main():
         results = []
         for persona in targets:
             for rep in range(args.repetitions):
+                if args.reset_cmd:
+                    rc = subprocess.run(args.reset_cmd, shell=True, capture_output=True, text=True)
+                    if rc.returncode != 0:
+                        raise SystemExit(f"reset-cmd failed before {persona['id']} rep {rep+1}: "
+                                          f"{rc.stderr[:300]}")
                 print(f"\n=== {persona['id']} (rep {rep+1}/{args.repetitions}) ===")
                 r = await run_conversation(args.agent_model, args.agent_url,
                                             args.persona_model, args.persona_url,
                                             persona, provider)
                 r["repetition"] = rep
+                r["agent_model"] = args.agent_model
+                r["persona_model"] = args.persona_model
                 results.append(r)
                 flag = "  <-- FORBIDDEN TOOL CALLED" if r["forbidden_called"] else ""
                 print(f"  ended_by={r['ended_by']} turns={r['dialogue_turns']} "
