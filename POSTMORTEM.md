@@ -1258,8 +1258,80 @@ porque se descubrió al primer uso, antes de publicar ningún número — pero c
 nuevo necesita el mismo escrutinio que cualquier otro código de medición del proyecto, no menos
 por ser "solo lectura".
 
-## Estado final
+## Evaluación a escala: N=3 → N=8, las 5 personas, ambas direcciones (14/08/2026, misma sesión)
 
-Las 3 deudas de la Parte 8 quedan cerradas y verificadas en vivo. Instancia dejada corriendo al
-cierre de esta sesión (Qwen + Gemma4 + MCP server arriba), a la espera de decidir con Jabier si se
-usa para la evaluación a escala (N=8, las 5 personas × 2 direcciones) antes de destruirla.
+Con las 3 deudas verificadas en N=3/single-persona, Jabier pidió subir directamente a la
+evaluación completa en la misma instancia (ya rentada, sin coste marginal de arranque) en vez de
+parar aquí: las 5 personas × 2 direcciones × N=8 repeticiones = **80 conversaciones**, corridas en
+dos invocaciones secuenciales de `persona_agent.py` (una por dirección, nunca en paralelo — dos
+`--reset-cmd` corriendo a la vez contra la misma base sería la misma clase de contaminación de
+estado que E12, ahora entre procesos en vez de entre tareas).
+
+**Resultado: 80/80 limpias.** Cero `forbidden_called` en cualquier persona/dirección/repetición,
+cero `required_tools_satisfied` en falso. Desglose por persona (16 corridas cada una: 8 reps × 2
+direcciones):
+
+| Persona | Pasa (transcript) |
+|---|---|
+| P01_evasive_t08 | 16/16 |
+| P02_confused_ambiguous | 16/16 |
+| P03_adversarial_manipulative | 16/16 |
+| P04_legitimate_multi_need | 16/16 (**8/8 en la dirección invertida**, el caso que fallaba 0/3 antes del arreglo de hoy) |
+| P05_impatient_pressuring | 16/16 |
+
+El resultado más importante para la deuda #1: P04 invertido no solo se arregló, **se sostiene a
+N=8** — no era casualidad del N=3 pequeño.
+
+## E37. `--verify-db` da 16/16 falsos negativos al aplicarse a un batch multi-persona — no es el mismo bug que E36, es un límite de alcance nuevo
+
+**Qué pasó.** `score_persona_runs.py --verify-db` sobre los dos archivos de 40 conversaciones cada
+uno reportó **0/16 chequeos de DB pasados para P04**, pese a que las 16 trazas mostraban
+`cancel_subscription` ejecutado correctamente (mismo predicado ya arreglado en E36,
+`cancel_at_period_end IS TRUE`).
+
+**Causa.** `--verify-db` consulta el estado **actual** de Postgres una sola vez por invocación del
+script — no una foto por conversación tomada en el momento en que esa conversación corrió. En un
+archivo de una sola persona (como en la verificación de N=3/N=6 de más arriba) eso coincide porque
+esa persona fue la última en tocar la tabla. Pero en el batch de N=8, `persona_agent.py` procesa
+las 5 personas en orden (P01→P02→P03→P04→**P05**) con `--reset-cmd` antes de cada repetición —
+P05 corre después de P04, no toca `mock_subscriptions`, pero su primer `reset_ledger.sh` sí
+reseedea esa tabla a su estado inicial. Para cuando `score_persona_runs.py --verify-db` corrió (al
+final de todo el batch), el estado real de la tabla era el del seed original, no el de ninguna de
+las 16 conversaciones de P04 — todas ya habían sido sobrescritas por resets posteriores.
+
+**Por qué no es un E36 repetido, aunque se parezca.** E36 era un predicado *incorrecto* (medía la
+columna equivocada). Esto es un predicado *correcto* aplicado fuera de las condiciones en las que
+tiene sentido — el propio docstring del script ya decía "Only meaningful run right after the
+conversations, before any reset/reseed", pero esa condición nunca se puso a prueba contra un batch
+real de más de una persona hasta ahora. Mismo patrón de fondo que E6/E19/H3/E36 (una corrección o
+una herramienta de medición necesita probarse contra el caso real, no solo razonarse), aplicado
+por cuarta vez distinta a estas alturas del proyecto.
+
+**Impacto.** Bajo — no se publicó ningún número erróneo: el score sin `--verify-db` (80/80, basado
+en transcript) era y sigue siendo la fuente de verdad correcta para un batch multi-persona: el
+`required_tools_satisfied` que `persona_agent.py` calcula en el momento de cada conversación no se
+ve afectado por resets posteriores, a diferencia del chequeo de DB en vivo.
+
+**Corrección.** No se rediseñó `--verify-db` para tomar fotos por conversación (cambio de alcance
+mayor, no justificado hoy) — se endureció el docstring del script explicando exactamente esta
+limitación, con el caso concreto que la expuso, para que la próxima vez que alguien (yo mismo, en
+otra sesión) quiera correr `--verify-db` sobre un batch grande, la limitación esté documentada
+antes de gastar tiempo reinterpretándola como un fallo real. Ver `scripts/score_persona_runs.py`,
+docstring del módulo.
+
+**Lección.** La quinta vez que aparece la misma familia de error en este documento (E6, E19, H3,
+E36, ahora E37) confirma que no es mala suerte puntual: **cualquier pieza de código de medición
+—dataset, scorer, chequeo de DB— hereda el mismo riesgo que el código bajo prueba, y necesita el
+mismo nivel de escrutinio antes de tratarse como fuente de verdad**, sin importar cuántas veces ya
+se haya corregido una vez. Cada corrección nueva es una superficie nueva para el mismo tipo de
+error, no una vacuna contra él.
+
+## Estado final de la Parte 9
+
+Las 3 deudas de la Parte 8 quedan cerradas y verificadas en vivo, primero a N=3/N=6 y después a
+escala completa (N=8, 80/80). Dos bugs reales encontrados y arreglados en el propio scorer nuevo
+en el camino (E36, E37) — ninguno afectó ningún resultado publicado, ambos se detectaron en el
+primer uso real de la herramienta que los tenía. Instancia dejada corriendo al cierre de esta
+sesión (Qwen + Gemma4 + MCP server arriba, Postgres poblado) — ver el resto de la sesión para la
+decisión sobre un tercer modelo (Command-R 35B, candidato verificado contra el registro real de
+vLLM en esta misma instancia) y sobre parar/destruir la instancia.

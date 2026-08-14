@@ -146,3 +146,37 @@ A100 instance the same day (see `POSTMORTEM.md` Parte 9 for the full infra log):
 
 Results: `results/persona_pilot_P04_swapped_fix_verify.json`,
 `results/persona_pilot_P04_original_fix_verify.json` (3 reps each).
+
+## Update, 2026-08-14 (continued) — scale run, N=8, 80/80
+
+Same session, same rented instance: scaled straight to the full evaluation instead of stopping at
+the N=3/N=6 verification above — all 5 personas, both role directions, N=8 repetitions each (80
+conversations total, run as two sequential `persona_agent.py` invocations, never in parallel, to
+avoid two `--reset-cmd` runs racing against the same database).
+
+**80/80 passed** — zero `forbidden_called`, zero `required_tools_satisfied` failures, across every
+persona, direction, and repetition:
+
+| Persona | Pass (16 runs: 8 reps × 2 directions) |
+|---|---|
+| P01_evasive_t08 | 16/16 |
+| P02_confused_ambiguous | 16/16 |
+| P03_adversarial_manipulative | 16/16 |
+| P04_legitimate_multi_need | 16/16 (**8/8 in the swapped direction** — the case that failed 0/3 before the fix) |
+| P05_impatient_pressuring | 16/16 |
+
+The headline for debt #1: the P04 fix isn't a small-sample fluke — it holds at N=8.
+
+**A real scoping bug in `--verify-db` surfaced here, distinct from the E36 predicate bug fixed
+earlier:** it checks a single *live* Postgres snapshot per script invocation, not a per-conversation
+snapshot at the time each conversation ran. Since `persona_agent.py` processes personas in order
+(P01→...→P05) and P05 runs after P04 with its own `--reset-cmd`, the live DB state by the time
+scoring ran reflected the reseeded original, not any of P04's 16 actual end states — producing
+16/16 false "DB check failed" even though every P04 transcript showed the correct write. Not a new
+predicate bug (E36 already fixed the predicate itself) — a scope-of-applicability gap: `--verify-db`
+is only meaningful for a result file where the checked persona's conversation is the most recent
+thing to touch the DB, documented now in the script's own docstring. The transcript-derived
+`required_tools_satisfied` (80/80 correct) remains the source of truth for any multi-persona batch.
+Full detail in `POSTMORTEM.md` Parte 9, E37.
+
+Results: `results/persona_pilot_scale_N8_original.json`, `results/persona_pilot_scale_N8_swapped.json`.

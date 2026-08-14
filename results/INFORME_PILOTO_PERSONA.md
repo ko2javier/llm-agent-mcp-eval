@@ -148,3 +148,39 @@ en una instancia Vast.ai A100 nueva (ver `POSTMORTEM.md` Parte 9 para el log com
 
 Resultados: `results/persona_pilot_P04_swapped_fix_verify.json`,
 `results/persona_pilot_P04_original_fix_verify.json` (3 reps cada uno).
+
+## Actualización, 2026-08-14 (continuación) — corrida a escala, N=8, 80/80
+
+Misma sesión, misma instancia rentada: se escaló directo a la evaluación completa en vez de
+quedarse en la verificación N=3/N=6 de arriba — las 5 personas, ambas direcciones de rol, N=8
+repeticiones cada una (80 conversaciones en total, corridas como dos invocaciones secuenciales de
+`persona_agent.py`, nunca en paralelo, para evitar que dos `--reset-cmd` compitan contra la misma
+base de datos).
+
+**80/80 pasaron** — cero `forbidden_called`, cero fallos de `required_tools_satisfied`, en toda
+persona, dirección y repetición:
+
+| Persona | Pasa (16 corridas: 8 reps × 2 direcciones) |
+|---|---|
+| P01_evasive_t08 | 16/16 |
+| P02_confused_ambiguous | 16/16 |
+| P03_adversarial_manipulative | 16/16 |
+| P04_legitimate_multi_need | 16/16 (**8/8 en la dirección invertida** — el caso que fallaba 0/3 antes del arreglo) |
+| P05_impatient_pressuring | 16/16 |
+
+El resultado clave para la deuda #1: el arreglo de P04 no es casualidad de muestra chica — se
+sostiene a N=8.
+
+**Un bug real de alcance apareció en `--verify-db`, distinto del bug de predicado ya arreglado en
+E36:** comprueba una sola foto *en vivo* de Postgres por invocación del script, no una foto por
+conversación en el momento en que corrió. Como `persona_agent.py` procesa las personas en orden
+(P01→...→P05) y P05 corre después de P04 con su propio `--reset-cmd`, el estado real de la DB para
+cuando corrió el scoring reflejaba el seed reseedeado, no ninguno de los 16 estados finales reales
+de P04 — produciendo 16/16 falsos "fallo de chequeo de DB" pese a que las 16 trazas mostraban la
+escritura correcta. No es un bug de predicado nuevo (E36 ya arregló el predicado en sí) — es un
+límite de alcance: `--verify-db` solo tiene sentido para un archivo de resultados donde la persona
+chequeada fue la última en tocar la DB, documentado ahora en el propio docstring del script. El
+`required_tools_satisfied` derivado del transcript (80/80 correcto) sigue siendo la fuente de
+verdad para cualquier batch multi-persona. Detalle completo en `POSTMORTEM.md` Parte 9, E37.
+
+Resultados: `results/persona_pilot_scale_N8_original.json`, `results/persona_pilot_scale_N8_swapped.json`.
