@@ -10,7 +10,18 @@ two independent signals per conversation:
   2. --verify-db: an independent check against the ACTUAL Postgres state, not just the tool-call
      transcript. A transcript can show the right tool call without proving it committed — same
      "attempted vs succeeded" gap already flagged as H3 in POSTMORTEM.md for the single-turn
-     scorer. Only meaningful run right after the conversations, before any reset/reseed.
+     scorer.
+
+     SCOPE LIMIT, learned the hard way on the 2026-08-14 N=8 scale run: this checks a single LIVE
+     snapshot of the DB, taken whenever you run this script — not a per-conversation snapshot at
+     the time each conversation actually ran. It is only meaningful for a result file whose LAST
+     conversation is the one you care about (e.g. a single-persona run, or the very last persona
+     in a --personas-file batch), because --reset-cmd between every later repetition/persona wipes
+     whatever an earlier conversation left behind. Running --verify-db against a full multi-persona
+     batch produced 16/16 false "DB state check failed" for P04 even though every P04 conversation's
+     own transcript showed the write happening correctly — P05 ran after P04 and reset the table
+     again before the check could see it. Trust required_tools_satisfied (transcript-derived, valid
+     per-conversation regardless of later resets) for anything but the single most-recent run.
 
 Usage:
     python scripts/score_persona_runs.py results/persona_pilot_repetitions_*.json
