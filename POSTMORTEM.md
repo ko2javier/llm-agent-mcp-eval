@@ -1171,3 +1171,95 @@ señal es dejar de iterar el prompt y **forzarlo en código**. El prompt sigue s
 lo que es genuinamente ambiguo/subjetivo (tono, qué tan evasivo sonar, cuándo "sentirse resuelto")
 — pero una regla mecánica como "no en el primer mensaje" es exactamente el tipo de cosa que el
 código puede garantizar al 100% y el prompt solo puede pedir con más o menos énfasis.
+
+---
+
+# Parte 9 — Arreglo y verificación en vivo de las 3 deudas del piloto (14/08/2026)
+
+Sesión nueva, instancia Vast.ai nueva (A100 80GB SXM4). Objetivo: cerrar las 3 deudas explícitas
+que quedaron abiertas al final de la Parte 8 (bug de P04 invertido, sin reset de DB entre
+repeticiones, scoring manual). El código de los tres arreglos se escribió y se commiteó en una
+sesión previa sin GPU rentada — esta sesión es la verificación en vivo, no el diseño.
+
+## E35. El propio scorer nuevo reprodujo el patrón de E20 al primer uso
+
+**Qué pasó.** Para esperar a que terminara `pip install -r requirements.txt` en segundo plano, se
+lanzó `while pgrep -f 'pip install -r' >/dev/null; do sleep 5; done; echo REQ_DONE2; ...` como un
+único comando remoto. El wrapper nunca imprimió `REQ_DONE2` pese a que la instalación sí había
+terminado (confirmado por separado con `python -c "import torch"`).
+
+**Causa.** Exactamente E20: la línea de comandos del propio wrapper (`bash -c "while pgrep -f 'pip
+install -r' ..."`) contiene el texto `pip install -r` dentro de su propio argumento a `pgrep -f`,
+así que el wrapper se detecta a sí mismo indefinidamente. Ya estaba documentado en este mismo
+archivo tras la sesión del 12/08 y volvió a pasar, en un proceso completamente distinto (aquí,
+esperar un `pip install`, no un `pip install` en sí).
+
+**Impacto.** Bajo — no bloqueó nada porque se verificó el estado real (`ps aux` con un patrón de
+texto distinto, y el import directo) en vez de confiar en el wrapper colgado, y no se perdió
+ningún trabajo real.
+
+**Corrección aplicada esta vez, para el resto de la sesión.** Se dejó de usar `pgrep -f` para
+esperar cualquier proceso lanzado por este mismo agente. Todo el resto de la Parte 9 (instalación
+de vLLM, arranque secuencial de los dos servidores) esperó por **archivo centinela**
+(`touch archivo_done` al final del comando, `while [ ! -f archivo_done ]; do sleep N; done` para
+esperarlo) o por **estado real verificable** (`curl .../health` con código 200), nunca por texto
+de proceso.
+
+**Lección, otra vez, la que ya estaba escrita.** Documentar un patrón de fallo una vez no evita
+que un agente distinto (o el mismo, en otra sesión) lo repita al construir un comando nuevo desde
+cero — la mitigación tiene que ser un hábito operativo (archivo centinela / estado real, nunca
+`pgrep -f` con texto que el propio wrapper contiene), no solo una entrada en un documento que hay
+que recordar releer en el momento exacto de escribir el comando.
+
+## Verificación de las 3 deudas
+
+Con `Qwen/Qwen2.5-32B-Instruct-AWQ` (puerto 8081) y `QuantTrio/gemma-4-31B-it-AWQ` (puerto 8082)
+arriba (mismo procedimiento de la Parte 8: MPS, `VLLM_USE_FLASHINFER_SAMPLER=0`, arranque
+secuencial esperando `/health`, flags de tool-calling puestos desde el primer arranque de cada
+servidor por los dos roles que cada uno iba a jugar):
+
+- **Bug de P04 invertido (deuda #1):** `P04_legitimate_multi_need`, Gemma4-agente/Qwen-persona, 3
+  repeticiones con `--reset-cmd`. **3/3 completaron `cancel_subscription`**, contra 0/3 en la
+  Parte 8. Regresión sobre la dirección original (Qwen-agente/Gemma4-persona), también 3/3
+  limpio — el gate de `required_tools` no cambió nada ahí, como se esperaba (lista vacía para
+  el resto de personas, chequeo trivialmente verdadero).
+- **Reset de DB entre repeticiones (deuda #2):** confirmado indirectamente en las 6 corridas
+  anteriores — cada repetición arrancó con `list_subscriptions`/`get_subscription` mostrando
+  SUB-5001 `active`, nunca "ya cancelada" de una repetición previa.
+- **Scoring automático (deuda #3):** `scripts/score_persona_runs.py --verify-db` corrido contra
+  los 6 resultados. Primera corrida: **0/6**, todos marcados como fallo de estado de DB — no era
+  un fallo real, era un bug en el propio scorer (ver abajo). Tras el arreglo: **6/6**.
+
+## E36. `DB_CHECKS` de P04 asumía cancelación inmediata; el comportamiento correcto (y lo que el agente hizo) es diferido
+
+**Qué pasó.** `score_persona_runs.py --verify-db` marcó las 6 conversaciones de P04 como fallo de
+estado de DB, incluida la corrida cuya traza mostraba al agente confirmando correctamente la
+cancelación ("access until the end of your current period").
+
+**Causa.** El predicado escrito para `DB_CHECKS["P04_legitimate_multi_need"]` comprobaba `status =
+'canceled'`. Pero `cancel_subscription` (`tools_extended.py`) tiene `at_period_end=True` por
+defecto, y en esa rama solo actualiza `cancel_at_period_end = TRUE`, dejando `status` sin tocar
+hasta que el período termine de verdad — exactamente lo que el agente invocó (nadie pidió
+cancelación inmediata) y exactamente lo que su respuesta en texto describía. El predicado nunca se
+había probado contra una corrida real antes de este momento.
+
+**Impacto.** Bajo — se detectó en el primer uso real del `--verify-db`, antes de reportar ningún
+resultado como definitivo, y el arreglo fue una línea.
+
+**Corrección.** Cambiar el predicado a `cancel_at_period_end IS TRUE`, que es verdadero en ambas
+ramas de `cancel_subscription` (inmediata o diferida) y es lo que realmente distingue "se canceló"
+de "no se tocó". Re-verificado 6/6 tras el cambio.
+
+**Lección, la misma de E6/E19/H3 otra vez, ahora en una herramienta de medición nueva en vez de
+en el dataset o en el código bajo prueba.** Un chequeo de verificación escrito sin haberlo corrido
+nunca contra un caso real tiene el mismo riesgo que cualquier otra "corrección sin verificar la
+corrección": aquí casi convierte un arreglo exitoso en un falso reporte de fallo. Cero costo
+porque se descubrió al primer uso, antes de publicar ningún número — pero confirma que un scorer
+nuevo necesita el mismo escrutinio que cualquier otro código de medición del proyecto, no menos
+por ser "solo lectura".
+
+## Estado final
+
+Las 3 deudas de la Parte 8 quedan cerradas y verificadas en vivo. Instancia dejada corriendo al
+cierre de esta sesión (Qwen + Gemma4 + MCP server arriba), a la espera de decidir con Jabier si se
+usa para la evaluación a escala (N=8, las 5 personas × 2 direcciones) antes de destruirla.

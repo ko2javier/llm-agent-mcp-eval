@@ -124,16 +124,25 @@ original is the post-fix version, see limitations). Code: `scripts/persona_agent
 
 ## Update, 2026-08-14
 
-Debts from this pilot's limitations section were addressed in the next session (not yet
-re-verified with a live run — see `POSTMORTEM.md` for status once that happens):
+Debts from this pilot's limitations section were fixed and **verified live** on a fresh Vast.ai
+A100 instance the same day (see `POSTMORTEM.md` Parte 9 for the full infra log):
 
 - `persona_agent.py` gained a `required_tools` gate: for personas that declare it (currently only
   P04, `["cancel_subscription"]`), the loop won't let the persona end the conversation until that
   tool actually appears in the agent's tool-call history, independent of `min_dialogue_turns`.
-  Fixes the swapped-direction P04 bug described above.
-- `persona_agent.py` gained `--reset-cmd`, mirroring `mcp_agent.py`, run before every repetition —
-  fixes the cross-repetition contamination described above.
+  **Verified:** P04 swapped direction (Gemma4-agent/Qwen-persona), 3/3 repetitions now complete
+  the cancellation, vs. 0/3 before the fix. Regression-checked against the original direction
+  (Qwen-agent/Gemma4-persona), also 3/3 clean — no behavior change there.
+- `persona_agent.py` gained `--reset-cmd`, mirroring `mcp_agent.py`, run before every repetition.
+  **Verified:** all 6 repetitions across both directions started from a fresh `list_subscriptions`
+  showing SUB-5001 active, not "already canceled" from a prior rep.
 - New `scripts/score_persona_runs.py` scores conversation results automatically instead of
-  reading transcripts by hand: `forbidden_called` / `required_tools_satisfied` from the
-  transcript, plus an optional `--verify-db` check against actual Postgres state (currently only
-  wired for P04's subscription status).
+  reading transcripts by hand, with an optional `--verify-db` check against actual Postgres state.
+  **Verified, and caught a real bug in itself on first use:** the initial `DB_CHECKS` predicate for
+  P04 asserted `status = 'canceled'`, but `cancel_subscription` defaults to `at_period_end=True`,
+  which only flips `cancel_at_period_end` and leaves `status` unchanged until the period ends — the
+  same behavior the agent correctly used. Fixed to check `cancel_at_period_end = TRUE` instead;
+  re-verified 6/6 passing against live DB state after the fix.
+
+Results: `results/persona_pilot_P04_swapped_fix_verify.json`,
+`results/persona_pilot_P04_original_fix_verify.json` (3 reps each).

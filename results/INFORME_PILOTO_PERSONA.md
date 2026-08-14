@@ -121,3 +121,30 @@ Todos en `results/`, prefijo `persona_pilot_`:
 `repetitions_P0{4,5}_N3_{original,swapped}.json` (P04/P05 × 3 reps, ambas direcciones — P04
 original es la versión post-fix, ver limitaciones). Código: `scripts/persona_agent.py`. Personas:
 `dataset/personas_pilot.json`. Versión en inglés: `PERSONA_PILOT_REPORT.md`.
+
+## Actualización, 2026-08-14
+
+Las deudas de la sección de limitaciones se arreglaron y se **verificaron en vivo** el mismo día,
+en una instancia Vast.ai A100 nueva (ver `POSTMORTEM.md` Parte 9 para el log completo de infra):
+
+- `persona_agent.py` ganó un gate de `required_tools`: para las personas que lo declaran
+  (por ahora solo P04, `["cancel_subscription"]`), el loop no deja que el persona termine la
+  conversación hasta que esa tool aparezca de verdad en el historial de llamadas del agente,
+  independiente de `min_dialogue_turns`. **Verificado:** P04 dirección invertida
+  (Gemma4-agente/Qwen-persona), 3/3 repeticiones completan la cancelación ahora, contra 0/3 antes
+  del arreglo. Regresión chequeada contra la dirección original (Qwen-agente/Gemma4-persona),
+  también 3/3 limpio — sin cambio de comportamiento ahí.
+- `persona_agent.py` ganó `--reset-cmd`, igual que `mcp_agent.py`, corrido antes de cada
+  repetición. **Verificado:** las 6 repeticiones en ambas direcciones arrancaron con un
+  `list_subscriptions` fresco mostrando SUB-5001 activa, no "ya cancelada" de una rep anterior.
+- El nuevo `scripts/score_persona_runs.py` puntúa resultados automáticamente en vez de leer
+  transcripts a mano, con un chequeo opcional `--verify-db` contra el estado real de Postgres.
+  **Verificado, y atrapó un bug real en sí mismo al primer uso:** el predicado inicial de
+  `DB_CHECKS` para P04 afirmaba `status = 'canceled'`, pero `cancel_subscription` por defecto usa
+  `at_period_end=True`, que solo cambia `cancel_at_period_end` y deja `status` sin tocar hasta que
+  el período termina — el mismo comportamiento que el agente usó correctamente. Arreglado para
+  chequear `cancel_at_period_end = TRUE`; re-verificado 6/6 contra el estado real de la DB tras el
+  arreglo.
+
+Resultados: `results/persona_pilot_P04_swapped_fix_verify.json`,
+`results/persona_pilot_P04_original_fix_verify.json` (3 reps cada uno).
