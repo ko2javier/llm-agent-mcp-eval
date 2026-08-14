@@ -1326,12 +1326,110 @@ mismo nivel de escrutinio antes de tratarse como fuente de verdad**, sin importa
 se haya corregido una vez. Cada corrección nueva es una superficie nueva para el mismo tipo de
 error, no una vacuna contra él.
 
+## E38. Investigación de Command-R 35B como tercer modelo — descartado, incompatibilidad estructural de formato de tools, no un bug de una cuantización concreta
+
+**Por qué se eligió este candidato.** Deuda pendiente desde la Parte 8 ("añadir un tercer modelo
+que funcione, Llama no, Mistral no"). Se descartó explícitamente Llama-70B en esta misma sesión
+por decisión de Jabier: los otros dos modelos del proyecto (Qwen 32B, Gemma4 31B) son del mismo
+orden de magnitud, y Meta no tiene ningún tamaño Llama en ese rango (salta de 8B a 70B) —
+introducir un modelo 2x más grande rompería la narrativa de "mismo orden, tres vendors distintos".
+Se buscó, antes de gastar GPU, un candidato que cumpliera dos condiciones verificables por
+adelantado (mismo método que ya se usó para decidir Gemma4/vLLM en fases anteriores — comprobar,
+no asumir):
+
+1. **Arquitectura base soportada en vLLM 0.26.0**, confirmado leyendo
+   `vllm/model_executor/models/registry.py` en la propia instancia:
+   `"CohereForCausalLM": ("commandr", "CohereForCausalLM")` — soporte nativo, no un parche.
+2. **Parser de tool-calling nativo**, confirmado con el mismo método: existe
+   `vllm/tool_parsers/cohere_command_tool_parser.py`, con dos variantes registradas
+   (`cohere_command3`, `cohere_command4`).
+
+Con ambas condiciones cumplidas (a diferencia de Yi-1.5-34B, que no tiene ningún parser dedicado
+ni genérico verificado), Command-R 35B fue el candidato con más soporte real. Riesgo señalado por
+adelantado, antes de intentar cargarlo: la única cuantización AWQ disponible
+(`TechxGenus/c4ai-command-r-v01-AWQ`) tenía 535 descargas/mes — muy por debajo del listón de
+"50k+/mes = maduro" usado para aceptar el AWQ de Mistral en su momento (y que, en aquel caso,
+tampoco evitó el problema — ver E31). Se documentó el riesgo, se decidió probar igual porque el
+soporte de arquitectura+parser en vLLM sí estaba confirmado (a diferencia de Mistral, donde nunca
+lo estuvo del todo).
+
+**Intento 1 — OOM de KV cache.** Con `--gpu-memory-utilization 0.45 --max-model-len 16384`
+(mismos parámetros que Qwen/Gemma4), el motor murió al iniciar:
+`ValueError: ... 20.0 GiB KV cache is needed, which is larger than the available KV cache memory
+(11.72 GiB)`. Causa: Command-R tiene un vocabulario mucho mayor (256k tokens) que Qwen/Gemma4, lo
+que deja menos presupuesto para KV cache dentro de la misma fracción de memoria una vez cargados
+los pesos+embeddings. **No es el mismo tipo de fallo que Mistral** — es dimensionamiento simple,
+arreglado bajando `--max-model-len` a 8192 (de sobra para las conversaciones cortas de este
+proyecto — nunca se ha superado ese límite en ninguna corrida real hasta ahora). Reinicio limpio,
+sirvió al segundo intento.
+
+**Intento 2 — incompatibilidad real de chat-template, diagnosticada con precisión de línea.** Con
+el modelo ya sano (`/health` 200), la primera llamada de `mcp_agent.py` (con tools) devolvió 400.
+Un chat plano sin tools, probado aparte con `curl` directo (no `requests`, que se traga el cuerpo
+del error 400 — misma lección que E31), respondió bien: **el problema no es la plantilla en
+general, es específicamente cómo intenta renderizar la lista de `tools`.**
+
+Inspección directa del `tokenizer_config.json` descargado (no de memoria/documentación): el campo
+`chat_template` no es un string, es una **lista de 3 plantillas nombradas** (`default`, `tool_use`,
+`rag`). La plantilla `tool_use`, línea 17 exacta:
+
+```jinja
+def ' + tool.name + '('}}{% for param_name, param_fields in tool.parameter_definitions.items() %}
+```
+
+Esto es el **formato nativo propio de Cohere** para tools (`name` + `parameter_definitions`, un
+diccionario de parámetros con `type`/`required`/`description` propios), publicado por Cohere en
+marzo de 2024 — anterior a que el formato de OpenAI (`{type:"function", function:{name,
+description, parameters: <JSON Schema>}}`, que es el que este proyecto genera en
+`MCPToolProvider.discover()`) se volviera el estándar de facto del ecosistema. El parser
+`cohere_command3` de vLLM asume que algo traduce entre ambos formatos antes de llegar a la
+plantilla; en este flujo (tools formato-OpenAI → Jinja genérico de HF), nadie lo hace.
+
+**No es un problema de esta cuantización concreta.** Se verificó explícitamente antes de descartar
+del todo: el refresco de agosto de 2024 del mismo modelo (`c4ai-command-r-08-2024`, mismo tamaño,
+35B, quant AWQ propia `AMead10/c4ai-command-r-08-2024-awq`) **sigue usando el mismo formato nativo**
+(`name` + `parameter_definitions`) vía un método dedicado `apply_tool_use_template()` — no adoptó
+el formato OpenAI. El único modelo de la familia Cohere confirmado (documentación oficial de
+vLLM) con soporte genuino de tools formato-OpenAI es **Command A+, un MoE de 218B** que requiere
+múltiples GPU H100 (`-tp 4`) — completamente fuera de escala y de la narrativa de "mismo orden de
+magnitud, ~30B" acordada para este proyecto.
+
+**Decisión: Command-R descartado por completo como familia, no solo esta cuantización.**
+Cualquier modelo Command-R en el rango de tamaño que encaja con Qwen/Gemma4 (~30-35B) usa el
+formato de tools propio de Cohere, incompatible con el puente OpenAI-tools de este proyecto sin
+escribir una plantilla Jinja de traducción a mano o abandonar `/v1/chat/completions` por
+`/v1/completions` con prompt armado manualmente — ninguna de las dos justificada hoy dado el
+alcance de la tarea (evaluar un tercer modelo, no construir un adaptador de formato de tools).
+
+**Impacto.** Medio en tiempo (~20 minutos entre instalar `cohere_melody`, dos ciclos de arranque,
+y el diagnóstico), cero en resultados publicados — nunca se corrió ninguna evaluación real contra
+Command-R, todo quedó en fase de smoke test. Cero coste de GPU desperdiciado más allá de lo ya
+justificado por la propia instancia rentada (Qwen/Gemma4 no se vieron afectados: Qwen se apagó
+deliberadamente para liberar VRAM — ver más abajo — y Gemma4 se verificó sano en todo momento).
+
+**Lección, distinta de la de Mistral (E31) aunque el síntoma externo se parezca.** Con Mistral, el
+problema era una cuantización comunitaria específica con archivos de tokenizer mezclados de dos
+formatos — la incertidumbre era "¿esta copia concreta está bien empaquetada?". Con Command-R, la
+verificación fue más profunda (se confirmó soporte de arquitectura+parser en vLLM antes de
+intentar, algo que nunca se hizo con la misma rigurosidad para Mistral) y aun así falló — pero por
+una razón estructural del propio modelo/vendor (convención de tools propia, anterior al estándar
+del ecosistema), no por un empaquetado descuidado. **Verificar arquitectura+parser en el código de
+vLLM es necesario pero no suficiente** — el parser existir no garantiza que el flujo completo
+(plantilla de chat real del modelo + esquema de tools que este proyecto genera) sea compatible sin
+trabajo de adaptación adicional. La única forma de saberlo con certeza es la que se usó aquí:
+probar un smoke test real con el tool-catalog real del proyecto, no solo un "hello world" sin
+tools (que sí funcionó y habría dado una falsa sensación de que todo estaba resuelto).
+
 ## Estado final de la Parte 9
 
 Las 3 deudas de la Parte 8 quedan cerradas y verificadas en vivo, primero a N=3/N=6 y después a
 escala completa (N=8, 80/80). Dos bugs reales encontrados y arreglados en el propio scorer nuevo
 en el camino (E36, E37) — ninguno afectó ningún resultado publicado, ambos se detectaron en el
-primer uso real de la herramienta que los tenía. Instancia dejada corriendo al cierre de esta
-sesión (Qwen + Gemma4 + MCP server arriba, Postgres poblado) — ver el resto de la sesión para la
-decisión sobre un tercer modelo (Command-R 35B, candidato verificado contra el registro real de
-vLLM en esta misma instancia) y sobre parar/destruir la instancia.
+primer uso real de la herramienta que los tenía. Tercer modelo investigado y **descartado**
+(Command-R, familia completa, E38) — deuda que sigue abierta, ahora con una razón estructural
+documentada en vez de una lista de candidatos sin probar. Qwen apagado deliberadamente durante la
+investigación de Command-R para liberar VRAM (matado por PID real vía `fuser`, no por `pgrep -f
+'vllm serve'`, seguido de la lección de E29); Gemma4 se mantuvo arriba sin interrupción por ser el
+modelo con mejor comportamiento como persona (H5). Instancia dejada corriendo al cierre de esta
+sesión (Gemma4 + MCP server arriba, Postgres poblado, Qwen apagado) a la espera de decisión sobre
+destruirla o reutilizarla.
