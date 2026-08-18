@@ -1,5 +1,7 @@
 # Postmortem: errores cometidos montando y midiendo la fase MCP
 
+*[English version: POSTMORTEM_EN.md]*
+
 Sesión del 05/08/2026. Documento de trabajo, no documentación del producto: recoge lo que salió
 mal durante el montaje del stack en la instancia Vast y durante el diseño del experimento de
 degradación por tamaño de catálogo.
