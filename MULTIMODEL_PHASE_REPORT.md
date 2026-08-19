@@ -189,6 +189,23 @@ Debt #1 is now closed: three vendors (Google, Alibaba, OpenAI), same fix, same c
 behaviorally-improved outcome on T08. Debt #4 is closed for the fix's generalization question; the
 `wrong_write` metric gap above is logged as a new, separate minor debt.
 
+**Update (19 Aug 2026) — the `wrong_write` metric debt is closed.** Fixed in
+`scripts/mcp_agent.py`, in this same repo's checkout
+(`D:\LLM_Testing\llm-agent-mcp-eval_20260813_persona_pilot\llm-agent-mcp-eval\` — the only real git
+checkout of this project; the other dated folders are document copies only). `wrong_write` now only
+counts a `WRITE_TOOLS` call if its own JSON result confirms it actually mutated state (no `"error"`
+key), instead of flagging any call to a forbidden write tool regardless of whether the guard
+blocked it — see `_write_succeeded()`. Verified by re-reading 4 already-saved `results/*.json`
+files (no GPU spent): Qwen's T08 flips from `wrong_write=True` to `False` as expected, and **Gemma
+4's T50 — previously logged as a separate "known false positive" (POSTMORTEM E15) — turned out to
+be the same underlying bug, not a distinct one**: `initiate_refund` blocked because the transaction
+was `pending`, not a real write. No other row in any of the 4 files changed. **Live re-verification,
+same day:** a fresh full 50-task run against Qwen2.5-32B-Instruct-AWQ on a new Vast.ai instance
+(RTX 4090 48GB) with the fix active — **48/50 tasks matched, 0/50 hit `MAX_TURNS`, `wrong_write:
+[]`**, zero false positives, confirmed on a real run and not just replayed old JSON. Result file
+`results/qwen25_32b_wrongwrite_verify_live.json` downloaded and hash-verified before touching the
+instance further.
+
 ### New, minor debt: precision of validator check #5
 
 The new check compares any expected write tool against any row touched by the same task, without

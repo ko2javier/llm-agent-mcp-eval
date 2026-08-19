@@ -206,8 +206,18 @@ el T08 de Qwen de la tabla de arriba pasa de `wrong_write=True` a `False`, y el 
 `False` — resultó ser el mismo bug de fondo, no uno distinto: `initiate_refund` bloqueado porque
 la transacción estaba `pending`, no una escritura real. Ningún otro resultado de `gemma4_v2_t08fix_full.json`,
 `qwen25_32b_v2_t08fix_full.json`, `gpt4o_v2_t08fix_full.json` ni `v2_full_annotated2.json` cambió de
-valor. Aún pendiente: correr el set completo en vivo en Vast con el fix activo (no solo releer JSON
-antiguos) para confirmar que también se comporta bien sobre una corrida nueva.
+valor.
+
+**Verificación en vivo (19 ago 2026, mismo día, Vast.ai, RTX 4090 48GB).** Corrida completa nueva de
+las 50 tareas contra Qwen2.5-32B-Instruct-AWQ con el fix activo (no releer JSON antiguos):
+`python scripts/mcp_agent.py --model Qwen/Qwen2.5-32B-Instruct-AWQ --tasks-file
+dataset/agent_tasks_v2.json --output results/qwen25_32b_wrongwrite_verify_live.json --reset-cmd
+"bash scripts/reset_ledger.sh"`. **Resultado: 48/50 tareas con match completo, 0/50 tocó
+`MAX_TURNS`, `wrong_write: []`** — cero falsos positivos, T08 no aparece marcado. 48/50 está dentro
+del rango de varianza ya documentado para este modelo (46-47/50, no-determinismo de vLLM a
+temperature=0). Archivo `results/qwen25_32b_wrongwrite_verify_live.json` descargado y verificado por
+hash (sha256 idéntico local/remoto) antes de tocar la instancia. Deuda de la métrica `wrong_write`
+cerrada del todo, tanto en revisión de datos antiguos como en corrida real nueva.
 
 ### Deuda nueva, menor: precisión del check #5 del validador
 
