@@ -194,6 +194,21 @@ limpio o mejorado en T08 en los tres. La deuda #4 queda cerrada en cuanto a si e
 generaliza; el hueco de la métrica `wrong_write` de arriba se registra como una deuda nueva y menor,
 aparte.
 
+**Actualización (19 ago 2026) — deuda de la métrica `wrong_write` cerrada.** Arreglada en
+`scripts/mcp_agent.py`, dentro de este mismo repo (carpeta local
+`D:\LLM_Testing\llm-agent-mcp-eval_20260813_persona_pilot\llm-agent-mcp-eval\` — es la única copia
+en git, las demás carpetas fechadas del proyecto son solo copias de documentos, no checkouts).
+`wrong_write` ahora solo cuenta una tool de `WRITE_TOOLS` si su propio resultado JSON confirma que
+mutó estado (sin clave `"error"`), no solo por haber sido llamada — ver `_write_succeeded()` en ese
+archivo. Verificado releyendo (sin gastar GPU) los JSON de resultados ya guardados en `results/`:
+el T08 de Qwen de la tabla de arriba pasa de `wrong_write=True` a `False`, y el `T50` de Gemma 4
+(la fila de arriba lo cita como "falso positivo ya conocido, POSTMORTEM E15") también pasa a
+`False` — resultó ser el mismo bug de fondo, no uno distinto: `initiate_refund` bloqueado porque
+la transacción estaba `pending`, no una escritura real. Ningún otro resultado de `gemma4_v2_t08fix_full.json`,
+`qwen25_32b_v2_t08fix_full.json`, `gpt4o_v2_t08fix_full.json` ni `v2_full_annotated2.json` cambió de
+valor. Aún pendiente: correr el set completo en vivo en Vast con el fix activo (no solo releer JSON
+antiguos) para confirmar que también se comporta bien sobre una corrida nueva.
+
 ### Deuda nueva, menor: precisión del check #5 del validador
 
 El nuevo check compara cualquier tool de escritura esperado contra cualquier fila tocada por la
