@@ -4,8 +4,7 @@ Este documento cuenta la historia completa de la sesión: qué se construyó, po
 verificó, y — la parte que no estaba escrita en ningún sitio — **qué quedó a medias**. Es el punto
 de entrada para entender el trabajo sin tener que reconstruirlo leyendo doce ficheros sueltos.
 
-Para los números en limpio: [`results/RESULTADOS_MCP.md`](results/RESULTADOS_MCP.md). Para la
-crónica de errores de medición: [`POSTMORTEM.md`](POSTMORTEM.md). Este informe resume ambos y les
+Para los números en limpio: [`results/RESULTADOS_MCP.md`](results/RESULTADOS_MCP.md). Este informe
 añade el hilo narrativo y las deudas pendientes.
 
 ---

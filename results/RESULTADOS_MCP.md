@@ -7,9 +7,7 @@ Versión en inglés: [`RESULTS_MCP.md`](RESULTS_MCP.md). Los resultados de la fa
 tareas con schemas hardcodeados) están en [`RESULTADOS.md`](RESULTADOS.md) y siguen siendo válidos —
 este documento no los reemplaza.
 
-Corridas crudas: [`./`](.) (esta misma carpeta). Todo lo que salió mal por el camino, incluidos
-cuatro errores de medición que produjeron números verosímiles pero falsos, está en
-[`../POSTMORTEM.md`](../POSTMORTEM.md). Qué fichero de corrida usar para qué, en
+Corridas crudas: [`./`](.) (esta misma carpeta). Qué fichero de corrida usar para qué, en
 [`NOTES.md`](NOTES.md). Un informe narrativo completo de toda la fase, con las deudas pendientes, en
 [`../INFORME_FASE_MCP.md`](../INFORME_FASE_MCP.md).
 

@@ -54,8 +54,7 @@ The same five tools are also served over [MCP](https://modelcontextprotocol.io) 
 [`results/RESULTADOS_MCP.md`](results/RESULTADOS_MCP.md) (Spanish). Headline: MCP discovery changes
 **nothing** the model does (+2.9 % overhead, zero different tool-call sequences); catalogue size does
 **not** degrade accuracy from 5 to 20 tools but costs **4.33× the prompt tokens**; and MCP
-annotations do not work as a safety mechanism. The measurement mistakes made along the way are
-documented in [`POSTMORTEM_EN.md`](POSTMORTEM_EN.md) (English) / [`POSTMORTEM.md`](POSTMORTEM.md) (Spanish original).
+annotations do not work as a safety mechanism.
 
 ```bash
 python scripts/mcp_server.py --port 8085          # terminal 1
@@ -129,11 +128,11 @@ Each persona ran with **both model-role assignments** (Qwen2.5-32B and Gemma4-31
 
 **The story worth telling is how it got to 80/80, not just the number.** The first pilot run (N=3, 13 Aug) found P04 failing 0/3 in one role direction — the agent never completed a legitimate cancellation. Root cause: the harness let the simulated persona end the conversation on a fixed turn count, before the agent (playing a role that needed one extra clarifying turn) got the chance to act — not an agent failure, a harness bug. Fixed by gating conversation-end on whether the expected tool actually appears in the agent's call history (`required_tools` in `persona_agent.py`), not on a turn count. Re-verified live on Vast.ai: 0/3 → 3/3 → **8/8** at full scale, with the original (already-working) direction regression-checked at every step to confirm the fix didn't break it. A second, independent finding along the way: a premature-conversation-end bug in the *scoring* harness itself (not the agent, not the simulator) initially made P02 look like an agent failure — caught before being reported, documented as a reminder that a multi-turn eval's own tooling needs the same scrutiny as the system under test.
 
-Full results: [`results/PERSONA_PILOT_REPORT.md`](results/PERSONA_PILOT_REPORT.md) (English) / [`results/INFORME_PILOTO_PERSONA.md`](results/INFORME_PILOTO_PERSONA.md) (Spanish). Debugging process: [`POSTMORTEM_EN.md`](POSTMORTEM_EN.md) / [`POSTMORTEM.md`](POSTMORTEM.md), Parts 8-9.
+Full results: [`results/PERSONA_PILOT_REPORT.md`](results/PERSONA_PILOT_REPORT.md) (English) / [`results/INFORME_PILOTO_PERSONA.md`](results/INFORME_PILOTO_PERSONA.md) (Spanish).
 
 ## Third model investigated, retired for a structural reason
 
-Cohere's **Command-R 35B** was investigated as a third vendor data point (after Qwen and Gemma4), verified against vLLM 0.26.0's actual source (`registry.py`, `cohere_command_tool_parser.py`) before spending any GPU time — the same architecture+parser check already used to validate Gemma4 in earlier phases. It loaded and served fine, but every tool-calling request failed: Command-R's chat template renders tools in **Cohere's own pre-OpenAI format** (`name` + `parameter_definitions`), not the `{type:"function", function:{...}}` schema this project (and the OpenAI-compatible ecosystem generally) generates. Verified this isn't one bad quantization — the August-2024 refresh of the same model uses the identical native format, and the only Cohere model confirmed to support OpenAI-format tools is Command A+, a 218B MoE requiring multi-H100 serving, well outside this project's ~30B/single-GPU scope. **Retired the whole Command-R family as a candidate** rather than force an adapter for a third data point of secondary value. Full diagnostic, including the exact Jinja template line, in [`POSTMORTEM_EN.md`](POSTMORTEM_EN.md) / [`POSTMORTEM.md`](POSTMORTEM.md), E38.
+Cohere's **Command-R 35B** was investigated as a third vendor data point (after Qwen and Gemma4), verified against vLLM 0.26.0's actual source (`registry.py`, `cohere_command_tool_parser.py`) before spending any GPU time — the same architecture+parser check already used to validate Gemma4 in earlier phases. It loaded and served fine, but every tool-calling request failed: Command-R's chat template renders tools in **Cohere's own pre-OpenAI format** (`name` + `parameter_definitions`), not the `{type:"function", function:{...}}` schema this project (and the OpenAI-compatible ecosystem generally) generates. Verified this isn't one bad quantization — the August-2024 refresh of the same model uses the identical native format, and the only Cohere model confirmed to support OpenAI-format tools is Command A+, a 218B MoE requiring multi-H100 serving, well outside this project's ~30B/single-GPU scope. **Retired the whole Command-R family as a candidate** rather than force an adapter for a third data point of secondary value.
 
 ## Observability (Langfuse)
 

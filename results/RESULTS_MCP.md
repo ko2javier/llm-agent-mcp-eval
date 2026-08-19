@@ -7,9 +7,7 @@ Spanish version: [`RESULTADOS_MCP.md`](RESULTADOS_MCP.md). Phase 3 results (the 
 hardcoded schemas) are in [`RESULTS.md`](RESULTS.md) and remain valid — this document does not
 replace them.
 
-Raw runs: [`./`](.) (this same folder). Everything that went wrong along the way, including
-four measurement errors that produced plausible-looking but false numbers, is in
-[`../POSTMORTEM.md`](../POSTMORTEM.md).
+Raw runs: [`./`](.) (this same folder).
 
 ---
 
